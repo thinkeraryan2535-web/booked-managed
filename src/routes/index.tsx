@@ -1,24 +1,178 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useMemo, useState } from "react";
+import {
+  ArrowLeft, Bell, CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight,
+  CircleDollarSign, Clock3, Heart, Home, ListChecks, MapPin, Menu, MoreHorizontal,
+  Plus, Search, Settings, Trash2, UserRound, UsersRound, X, Building2, Phone,
+  Mail, IndianRupee, Sparkles, Camera, Mic2, Music2, LogOut, HelpCircle, Info,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
-// No head() here: the home route inherits title/description/og/twitter from
-// __root.tsx, and ships no og:image so serve-time hosting can inject the
-// project's social preview (explicit og:image or latest screenshot).
 export const Route = createFileRoute("/")({
-  component: Index,
+  head: () => ({ meta: [
+    { title: "BBD — Event Operations" },
+    { name: "description", content: "BBD keeps your team’s bookings, tasks, people, and revenue in one mobile workspace." },
+    { property: "og:title", content: "BBD — Event Operations" },
+    { property: "og:description", content: "Bookings, tasks, teams, and revenue for modern event teams." },
+    { property: "og:type", content: "website" },
+    { name: "twitter:card", content: "summary_large_image" },
+  ], links: [{ rel: "canonical", href: "/" }] }),
+  component: App,
 });
 
-// IMPORTANT: Replace this placeholder. See ./README.md for routing conventions.
-function Index() {
+type Screen = "home" | "day" | "empty" | "add" | "event" | "team" | "bookings" | "tasks" | "completed" | "notifications" | "settings" | "revenue";
+type Task = { id: number; title: string; person: string; priority: "High" | "Medium" | "Low"; due: string; done: boolean };
+
+const events = [
+  { id: 1, day: 24, title: "Product Launch Night", client: "Aarav Mehta", date: "24 Sep 2026", time: "6:30 PM", venue: "The Grand Hotel · Delhi", budget: 850000, spent: 515000, people: 240, status: "Live" },
+  { id: 2, day: 27, title: "Annual Leadership Meet", client: "Northstar Labs", date: "27 Sep 2026", time: "10:00 AM", venue: "Taj Palace · Mumbai", budget: 620000, spent: 280000, people: 160, status: "Upcoming" },
+  { id: 3, day: 30, title: "Meera & Kabir", client: "Meera Sharma", date: "30 Sep 2026", time: "7:00 PM", venue: "The Park · Jaipur", budget: 1180000, spent: 720000, people: 420, status: "Upcoming" },
+];
+
+const members = [
+  { name: "Aryan Gupta", role: "Event Manager · You", initials: "AG", online: true },
+  { name: "Riya Sharma", role: "Production Lead", initials: "RS", online: true },
+  { name: "Kabir Singh", role: "Vendor Manager", initials: "KS", online: false },
+  { name: "Ananya Roy", role: "Guest Experience", initials: "AR", online: true },
+];
+
+const initialTasks: Task[] = [
+  { id: 1, title: "Confirm stage production setup", person: "Riya", priority: "High", due: "Today · 4:00 PM", done: false },
+  { id: 2, title: "Share final guest list with venue", person: "Aryan", priority: "Medium", due: "Today · 6:00 PM", done: false },
+  { id: 3, title: "Lock photographer arrival time", person: "Kabir", priority: "Low", due: "Tomorrow · 10:00 AM", done: false },
+  { id: 4, title: "Client menu approval", person: "Ananya", priority: "Medium", due: "Completed yesterday", done: true },
+];
+
+function Logo() { return <div className="grid size-10 place-items-center rounded-lg border border-border bg-card text-sm font-bold">BBD</div>; }
+
+function App() {
+  const [loggedIn, setLoggedIn] = useState(false);
+  const [otpStep, setOtpStep] = useState(false);
+  const [screen, setScreen] = useState<Screen>("home");
+  const [drawer, setDrawer] = useState(false);
+  const [tasks, setTasks] = useState(initialTasks);
+  const [toast, setToast] = useState("");
+  const [selectedDay, setSelectedDay] = useState(24);
+
+  const navigate = (next: Screen) => { setScreen(next); window.scrollTo({ top: 0, behavior: "smooth" }); };
+  const notify = (text: string) => { setToast(text); window.setTimeout(() => setToast(""), 2200); };
+
+  if (!loggedIn) return <Login otpStep={otpStep} setOtpStep={setOtpStep} onLogin={() => setLoggedIn(true)} />;
+
   return (
-    <div
-      className="flex min-h-screen items-center justify-center"
-      style={{ backgroundColor: "#fcfbf8" }}
-    >
-      <img
-        data-lovable-blank-page-placeholder="REMOVE_THIS"
-        src="https://cdn.gpteng.co/blank-app-v1.svg"
-        alt="Your app will live here!"
-      />
+    <div className="min-h-dvh bg-background">
+      <main className="relative mx-auto min-h-dvh w-full max-w-[480px] border-x border-border bg-background pb-28">
+        {screen === "home" && <HomeScreen onMenu={() => setDrawer(true)} onNavigate={navigate} setSelectedDay={setSelectedDay} />}
+        {screen === "day" && <DayScreen day={selectedDay} onBack={() => navigate("home")} onNavigate={navigate} />}
+        {screen === "empty" && <EmptyDay day={selectedDay} onBack={() => navigate("home")} onAdd={() => navigate("add")} />}
+        {screen === "add" && <AddBooking onBack={() => navigate("home")} onSave={() => { notify("Booking saved ✓"); navigate("home"); }} />}
+        {screen === "event" && <EventDetails onBack={() => navigate("bookings")} onNavigate={navigate} tasks={tasks} />}
+        {screen === "team" && <TeamScreen notify={notify} />}
+        {screen === "bookings" && <BookingsScreen onNavigate={navigate} />}
+        {screen === "tasks" && <TasksScreen tasks={tasks} setTasks={setTasks} onArchive={() => navigate("completed")} />}
+        {screen === "completed" && <CompletedScreen tasks={tasks} onBack={() => navigate("tasks")} />}
+        {screen === "notifications" && <NotificationsScreen onBack={() => navigate("home")} />}
+        {screen === "settings" && <SettingsScreen onSignOut={() => setLoggedIn(false)} />}
+        {screen === "revenue" && <RevenueScreen onBack={() => navigate("home")} />}
+        {!(["add", "day", "empty", "event", "completed", "notifications", "revenue"] as Screen[]).includes(screen) && <BottomNav screen={screen} navigate={navigate} />}
+        {screen === "home" && <Button variant="primary" aria-label="Add new booking" onClick={() => navigate("add")} className="fixed bottom-24 z-20 ml-[calc(min(100vw,480px)-72px)] size-14 rounded-full p-0 shadow-none"><Plus className="size-5" /></Button>}
+      </main>
+      {drawer && <Drawer onClose={() => setDrawer(false)} onRevenue={() => { setDrawer(false); navigate("revenue"); }} />}
+      {toast && <div className="fixed left-1/2 top-5 z-50 -translate-x-1/2 rounded-lg border border-border bg-foreground px-4 py-3 text-sm font-semibold text-background">{toast}</div>}
     </div>
   );
 }
+
+function Login({ otpStep, setOtpStep, onLogin }: { otpStep: boolean; setOtpStep: (v: boolean) => void; onLogin: () => void }) {
+  const [phone, setPhone] = useState(""); const [code, setCode] = useState("");
+  return <main className="mx-auto flex min-h-dvh w-full max-w-[480px] flex-col border-x border-border px-6 pb-8 pt-10">
+    <div className="flex items-center gap-3"><Logo /><span className="text-xl font-bold">BBD</span></div>
+    <div className="mt-auto mb-auto py-16">
+      <p className="mb-4 font-mono text-xs uppercase text-muted-foreground">Plan · Manage · Execute</p>
+      <h1 className="text-3xl font-bold">Welcome Back.</h1>
+      <p className="mt-3 text-sm leading-6 text-muted-foreground">Sign in to continue to your team account.</p>
+      {!otpStep ? <div className="mt-10 space-y-5"><Field label="Phone number" icon={<Phone />} value={phone} onChange={setPhone} placeholder="98765 43210" prefix="+91" /><Button className="w-full" onClick={() => setOtpStep(true)} disabled={phone.length < 6}>Send OTP <ChevronRight /></Button></div>
+      : <div className="mt-10 space-y-5"><div><label className="mb-2 block text-sm font-medium">6-digit OTP</label><input aria-label="OTP code" maxLength={6} inputMode="numeric" value={code} onChange={e => setCode(e.target.value.replace(/\D/g, ""))} placeholder="• • • • • •" className="h-14 w-full rounded-lg border border-border bg-secondary px-4 text-center font-mono text-xl tracking-[0.5em] outline-hidden focus:border-ring" /><p className="mt-2 text-xs text-muted-foreground">Enter the code sent to +91 {phone || "XXXXX XXXXX"}</p></div><Button className="w-full" disabled={code.length < 4} onClick={onLogin}>Verify & Continue <ChevronRight /></Button><button className="min-h-11 w-full text-sm text-muted-foreground">Resend OTP in 00:24</button></div>}
+    </div>
+    <p className="text-center text-xs text-muted-foreground">Invite-only access for the BBD team</p>
+  </main>;
+}
+
+function Header({ title, subtitle, back, right }: { title: string; subtitle?: string; back?: () => void; right?: React.ReactNode }) {
+  return <header className="sticky top-0 z-10 grid min-h-20 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 border-b border-border bg-background/95 px-4 backdrop-blur-sm">
+    {back ? <Button variant="icon" aria-label="Go back" onClick={back}><ArrowLeft /></Button> : <div />}
+    <div className="min-w-0"><h1 className="truncate text-xl font-bold">{title}</h1>{subtitle && <p className="truncate text-xs text-muted-foreground">{subtitle}</p>}</div><div>{right}</div>
+  </header>;
+}
+
+function HomeScreen({ onMenu, onNavigate, setSelectedDay }: { onMenu: () => void; onNavigate: (s: Screen) => void; setSelectedDay: (d: number) => void }) {
+  const marked = new Set(events.map(e => e.day)); const firstOffset = 2;
+  return <><header className="grid min-h-24 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-4"><Button variant="icon" aria-label="Open menu" onClick={onMenu}><Menu /></Button><div className="min-w-0"><p className="text-xs text-muted-foreground">Good morning</p><h1 className="truncate text-lg font-bold">Team BBD</h1></div><div className="flex"><Button variant="icon" aria-label="Notifications" onClick={() => onNavigate("notifications")} className="relative"><Bell /><span className="absolute right-2 top-2 size-2 rounded-full bg-destructive" /></Button><div className="grid size-10 place-items-center self-center rounded-full bg-secondary text-xs font-bold">AG</div></div></header>
+    <div className="space-y-8 px-4"><section className="rounded-xl border border-border bg-card p-4"><div className="mb-5 flex items-center justify-between"><div><p className="text-xs text-muted-foreground">Team calendar</p><h2 className="mt-1 text-lg font-semibold">September 2026</h2></div><div className="flex"><Button variant="icon" aria-label="Previous month"><ChevronLeft /></Button><Button variant="icon" aria-label="Next month"><ChevronRight /></Button></div></div><div className="grid grid-cols-7 text-center">{["S","M","T","W","T","F","S"].map((d,i)=><span key={`${d}${i}`} className="pb-3 text-xs text-muted-foreground">{d}</span>)}{Array.from({length:firstOffset}).map((_,i)=><span key={`x${i}`} />)}{Array.from({length:30},(_,i)=>i+1).map(day=><button key={day} onClick={() => { setSelectedDay(day); onNavigate(marked.has(day) ? "day" : "empty"); }} className="relative flex min-h-12 flex-col items-center justify-center rounded-lg text-sm"><span className={cn("grid size-8 place-items-center rounded-full", day===21 && "bg-primary font-semibold text-primary-foreground")}>{day}</span>{marked.has(day)&&<Heart className="absolute bottom-0 size-2.5 fill-destructive text-destructive" />}</button>)}</div></section>
+    <section><div className="mb-3 flex items-center justify-between"><h2 className="text-lg font-semibold">Upcoming events</h2><button onClick={() => onNavigate("bookings")} className="min-h-11 text-sm text-muted-foreground">View all ›</button></div><div className="space-y-3">{events.slice(0,3).map(e=><BookingRow key={e.id} event={e} onClick={() => onNavigate("event")} />)}</div></section></div></>;
+}
+
+function BookingRow({ event, onClick }: { event: typeof events[number]; onClick: () => void }) { return <button onClick={onClick} className="grid min-h-[88px] w-full grid-cols-[52px_minmax(0,1fr)_auto] items-center gap-3 rounded-xl border border-border bg-card p-3 text-left"><div className="grid h-14 place-items-center rounded-lg bg-secondary"><span className="font-mono text-lg font-semibold">{event.day}</span><span className="-mt-3 text-[10px] text-muted-foreground">SEP</span></div><div className="min-w-0"><p className="truncate font-semibold">{event.title} <span className="inline-block size-1.5 rounded-full bg-destructive" /></p><p className="mt-1 truncate text-xs text-muted-foreground">{event.client}</p><p className="mt-1 truncate text-xs text-muted-foreground">{event.time} · {event.venue}</p></div><ChevronRight className="size-4 text-muted-foreground" /></button>; }
+
+function DayScreen({ day, onBack, onNavigate }: { day: number; onBack: () => void; onNavigate: (s: Screen) => void }) {
+  const e = events.find(x=>x.day===day) ?? events[0]; const pct = Math.round(e.spent/e.budget*100);
+  return <><Header back={onBack} title={`${e.date}`} subtitle="Team Calendar" right={<Button variant="ghost" className="px-2">Day <ChevronDown /></Button>} /><div className="space-y-4 px-4 py-5">
+    <section className="relative overflow-hidden rounded-xl border border-border bg-card p-5"><div className="absolute inset-x-0 top-0 h-1 bg-foreground" /><span className="text-xs font-semibold text-muted-foreground">BOOKING</span><h2 className="mt-8 text-2xl font-bold">{e.title} <span className="inline-block size-2 rounded-full bg-destructive" /></h2><p className="mt-2 text-sm text-muted-foreground">For {e.client}</p><div className="mt-5 flex items-center gap-2 text-sm"><Clock3 className="size-4" />{e.time}</div><Button className="mt-6 w-full" onClick={() => onNavigate("event")}>View Full Details <ChevronRight /></Button></section>
+    <div className="grid grid-cols-3 divide-x divide-border rounded-xl border border-border bg-card py-4 text-center"><Quick label="Thursday" value={e.date.split(" ")[0]} /><Quick label="Location" value="Delhi" /><Quick label="Guests" value={`${e.people}`} /></div>
+    <InfoCard title="Client Details" action="Edit"><Detail icon={<UserRound />} title={e.client} text="Primary client" /><Detail icon={<Phone />} title="+91 98765 43210" text="Phone" /><Detail icon={<Mail />} title="aarav@northstar.in" text="Email" /><blockquote className="mt-4 border-l border-foreground pl-3 text-sm text-muted-foreground">“Keep the launch clean, premium and energetic.”</blockquote></InfoCard>
+    <InfoCard title="Venue Details"><Detail icon={<Building2 />} title="The Grand Hotel" text="Connaught Place, New Delhi" /><div className="mt-4 grid grid-cols-3 gap-2 text-xs"><Quick label="Hall" value="Regency"/><Quick label="Cost" value="₹2.4L"/><Quick label="Capacity" value="300"/></div></InfoCard>
+    <InfoCard title="Budget"><p className="font-mono text-2xl font-semibold">₹{(e.budget/100000).toFixed(1)}L</p><div className="my-4 h-1.5 overflow-hidden rounded-full bg-secondary"><div className="h-full bg-foreground" style={{width:`${pct}%`}} /></div><div className="grid grid-cols-2"><Quick label="Spent" value={`₹${(e.spent/100000).toFixed(2)}L`} /><Quick label="Remaining" value={`₹${((e.budget-e.spent)/100000).toFixed(2)}L`} /></div></InfoCard>
+    <InfoCard title="Special Demands" action="Edit"><div className="flex gap-2 overflow-x-auto no-scrollbar"><Chip>Vegan menu</Chip><Chip>LED stage</Chip><Chip>VIP lounge</Chip></div></InfoCard>
+    <InfoCard title="Extra Activity" action="Edit"><div className="flex gap-2"><Chip><Music2 /> DJ</Chip><Chip><Camera /> Photographer</Chip></div></InfoCard>
+    <Button className="sticky bottom-4 w-full" onClick={() => onNavigate("tasks")}>Manage Tasks <ChevronRight /></Button>
+  </div></>;
+}
+
+function EmptyDay({ day, onBack, onAdd }: { day: number; onBack: () => void; onAdd: () => void }) { return <><Header back={onBack} title="Team Day" subtitle={`${day} September · No bookings`} right={<Button variant="ghost" className="px-2">Team <ChevronDown /></Button>} /><div className="px-4 py-10"><div className="flex min-h-64 flex-col items-center justify-center text-center"><div className="grid size-20 place-items-center rounded-full border border-border bg-card"><CalendarDays className="size-8 text-muted-foreground" /></div><h2 className="mt-6 text-xl font-bold">No Booking for this Day</h2><p className="mt-2 max-w-xs text-sm text-muted-foreground">The team calendar is clear. Add a booking to start planning.</p><Button variant="outline" className="mt-6" onClick={onAdd}><CalendarDays />Add New Booking <ChevronRight /></Button></div>{[[CalendarDays,"Day Overview","Review schedule and notes"],[UsersRound,"Team Members","See who is available"],[ListChecks,"Upcoming Tasks","Check what needs attention"]].map(([Icon,t,s])=><button key={t as string} className="grid min-h-20 w-full grid-cols-[44px_1fr_auto] items-center gap-3 border-t border-border text-left"><span className="grid size-10 place-items-center rounded-full bg-card"><Icon className="size-4" /></span><span><b className="block text-sm">{t as string}</b><small className="text-xs text-muted-foreground">{s as string}</small></span><ChevronRight className="size-4 text-muted-foreground" /></button>)}</div><Button onClick={onAdd} aria-label="Add booking" className="fixed bottom-6 z-10 ml-[calc(min(100vw,480px)-72px)] size-14 rounded-full p-0"><Plus /></Button></>; }
+
+function AddBooking({ onBack, onSave }: { onBack: () => void; onSave: () => void }) {
+ const [activity,setActivity]=useState("DJ"); const [name,setName]=useState(""); const [phone,setPhone]=useState(""); const [venue,setVenue]=useState(""); const [error,setError]=useState(false);
+ const save=()=>{if(!name.trim()||phone.length<7||!venue.trim()){setError(true);return;}onSave();};
+ return <><Header back={onBack} title="Add New Booking" subtitle="Create a team event" /><form className="space-y-7 px-4 py-5 pb-28" onSubmit={e=>{e.preventDefault();save();}}>
+  <FormSection title="Client Details" subtitle="Enter the client's information"><Field label="Client Name *" value={name} onChange={setName} placeholder="Full name" error={error&&!name.trim()} /><Field label="Contact Person" placeholder="Optional" /><Field label="Phone Number *" value={phone} onChange={setPhone} placeholder="98765 43210" prefix="+91" error={error&&phone.length<7} /></FormSection>
+  <FormSection title="Event Details" subtitle="What and when is the event?"><SelectField label="Event Type *" options={["Corporate Retreat","Product Launch","Annual Meet","Client Dinner","Wedding","Birthday","Conference","Other"]}/><Field label="Date *" type="date" defaultValue="2026-09-24" /></FormSection>
+  <FormSection title="Venue" subtitle="Write below or pick a saved venue"><label className="text-sm font-medium">Saved Venues</label><div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar"><Chip>The Grand Hotel · Delhi</Chip><Chip>The Park · Jaipur</Chip><Chip>Taj Palace · Mumbai</Chip></div><Field label="Venue Name & Address *" textarea value={venue} onChange={setVenue} placeholder="The Grand Hotel, Connaught Place, New Delhi…" error={error&&!venue.trim()} /><p className="text-xs leading-5 text-muted-foreground">New venues are saved as suggestions for future bookings.</p></FormSection>
+  <FormSection title="Budget" subtitle="Advance payment and estimated total"><div className="grid grid-cols-2 gap-3"><Field label="Advance Payment" prefix="₹" inputMode="numeric" placeholder="0"/><Field label="Total Budget *" prefix="₹" inputMode="numeric" placeholder="0"/></div></FormSection>
+  <FormSection title="Hall Details" subtitle="Venue capacity and cost"><Field label="Place / Hall Name *" placeholder="Regency Hall"/><div className="grid grid-cols-2 gap-3"><Field label="Cost *" prefix="₹"/><Field label="No. of People *" inputMode="numeric"/></div></FormSection>
+  <FormSection title="Special Demand" subtitle="Specific client requirements"><Field label="Requirements" textarea placeholder="Menu, stage, accessibility…" /></FormSection>
+  <FormSection title="Extra Activity" subtitle="Entertainment and add-ons"><div className="flex gap-2 overflow-x-auto no-scrollbar">{[["Singer",Mic2],["Anchor",Mic2],["DJ",Music2],["Photographer",Camera],["Other",Plus]].map(([a,Icon])=><button type="button" key={a as string} onClick={()=>setActivity(a as string)} className={cn("flex min-h-11 shrink-0 items-center gap-2 rounded-full border px-4 text-sm",activity===a?"border-foreground bg-foreground text-background":"border-border bg-card")}><Icon className="size-4"/>{a as string}</button>)}</div><Field label="Activity details" placeholder="Name, time, genre, etc." /></FormSection>
+ </form><div className="safe-bottom fixed inset-x-0 bottom-0 z-20 mx-auto max-w-[480px] border-t border-border bg-background p-4"><Button className="w-full" onClick={save}><CalendarDays />Save Booking <ChevronRight /></Button></div></>;
+}
+
+function EventDetails({ onBack, onNavigate, tasks }: { onBack:()=>void; onNavigate:(s:Screen)=>void; tasks:Task[] }) { const [tab,setTab]=useState("Overview"); const e=events[0]; return <><Header back={onBack} title="Event Details" subtitle="BBD · Booking #2409"/><div className="px-4 py-5"><div><span className="text-xs text-muted-foreground">PRODUCT LAUNCH</span><h2 className="mt-2 text-2xl font-bold">{e.title} <span className="inline-block size-2 rounded-full bg-destructive"/></h2><p className="mt-2 text-sm text-muted-foreground">{e.client} · {e.date} · {e.time}</p><p className="mt-1 text-sm text-muted-foreground">{e.venue}</p><AvatarStack /></div><Tabs items={["Overview","Tasks","Team"]} active={tab} setActive={setTab}/>{tab==="Overview"&&<div className="space-y-4"><InfoCard title="Client"><Detail icon={<UserRound/>} title={e.client} text="+91 98765 43210"/></InfoCard><InfoCard title="Event Summary"><Detail icon={<CalendarDays/>} title={e.date} text={`${e.time} · ${e.people} guests`}/><Detail icon={<MapPin/>} title="The Grand Hotel" text="Connaught Place, New Delhi"/></InfoCard><Button className="w-full" onClick={()=>onNavigate("day")}>View All Details <ChevronRight/></Button></div>}{tab==="Tasks"&&<TaskList tasks={tasks} />}{tab==="Team"&&<div className="space-y-3">{members.slice(0,3).map(m=><MemberRow key={m.name} member={m}/>)}</div>}</div></>; }
+
+function TeamScreen({notify}:{notify:(s:string)=>void}) { const [filter,setFilter]=useState("All"); const [query,setQuery]=useState(""); const shown=members.filter(m=>(filter==="All"||(filter==="Online"?m.online:!m.online))&&m.name.toLowerCase().includes(query.toLowerCase())); return <><Header title="Team" subtitle={`${members.length} members`} right={<Button variant="icon" aria-label="Add team member" onClick={()=>notify("Invite link ready to share")}><Plus/></Button>}/><div className="space-y-5 px-4 py-5"><div className="flex min-h-12 items-center gap-3 rounded-lg bg-secondary px-3"><Search className="size-4 text-muted-foreground"/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search team" className="min-w-0 flex-1 bg-transparent text-sm outline-hidden"/></div><Tabs items={["All","Online","Offline"]} active={filter} setActive={setFilter}/><div className="space-y-3">{shown.length?shown.map(m=><MemberRow key={m.name} member={m}/>):<Empty title="No team members found" text="Try another search or filter."/>}</div></div></>; }
+
+function BookingsScreen({onNavigate}:{onNavigate:(s:Screen)=>void}) { const [tab,setTab]=useState("All"); return <><Header title="Bookings" subtitle="All team events" right={<Button variant="icon" aria-label="Add booking" onClick={()=>onNavigate("add")}><Plus/></Button>}/><div className="space-y-5 px-4 py-5"><Tabs items={["All","Upcoming","Past"]} active={tab} setActive={setTab}/><p className="text-xs uppercase text-muted-foreground">September · 3 events</p><div className="space-y-3">{events.map(e=><BookingRow key={e.id} event={e} onClick={()=>onNavigate("event")}/>)}</div></div></>; }
+
+function TasksScreen({tasks,setTasks,onArchive}:{tasks:Task[];setTasks:(t:Task[])=>void;onArchive:()=>void}) { const [tab,setTab]=useState("My Tasks"); const sorted=useMemo(()=>[...tasks].sort((a,b)=>Number(a.done)-Number(b.done)),[tasks]); const toggle=(id:number)=>setTasks(tasks.map(t=>t.id===id?{...t,done:!t.done}:t)); return <><Header title="Tasks" subtitle="Stay ahead of every detail"/><div className="space-y-5 px-4 py-5"><div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2"><Tabs items={["My Tasks","Team","All"]} active={tab} setActive={setTab}/><Button variant="icon" aria-label="Completed task archive" onClick={onArchive}><Trash2/></Button></div><div className="space-y-3">{sorted.map(t=><TaskRow key={t.id} task={t} toggle={()=>toggle(t.id)}/>)}</div></div></>; }
+function CompletedScreen({tasks,onBack}:{tasks:Task[];onBack:()=>void}) { const done=tasks.filter(t=>t.done); return <><Header back={onBack} title="Completed" subtitle="Task archive · Nothing is deleted"/><div className="space-y-3 px-4 py-5">{done.length?done.map(t=><TaskRow key={t.id} task={t}/>):<Empty title="No completed tasks" text="Finished work will be preserved here."/>}</div></>; }
+
+function NotificationsScreen({onBack}:{onBack:()=>void}) { const rows=[["New booking assigned","Product Launch Night was added to your schedule","2m"],["Task reminder","Confirm stage production setup is due at 4:00 PM","1h"],["Client message","“Please add a vegan menu option.”","3h"],["Team update","Riya completed venue inspection","Yesterday"],["Event completed","Brand Summit has been archived","2d"]]; return <><Header back={onBack} title="Notifications" subtitle="Recent team activity"/><div className="px-4">{rows.map(([t,d,time],i)=><div key={t} className="grid grid-cols-[44px_minmax(0,1fr)_auto] gap-3 border-b border-border py-4"><span className="grid size-10 place-items-center rounded-full bg-card">{i===4?<Check className="size-4 text-chart-2"/>:<Bell className="size-4"/>}</span><div className="min-w-0"><p className="text-sm font-semibold">{t}</p><p className="mt-1 text-xs leading-5 text-muted-foreground">{d}</p></div><span className="text-xs text-muted-foreground">{time}</span></div>)}</div></>; }
+
+function SettingsScreen({onSignOut}:{onSignOut:()=>void}) { const [dark,setDark]=useState(true); return <><Header title="More" subtitle="Settings and account"/><div className="px-4 py-5"><div className="mb-6 flex items-center gap-3 rounded-xl border border-border bg-card p-4"><div className="grid size-12 place-items-center rounded-full bg-secondary font-bold">AG</div><div className="min-w-0 flex-1"><p className="font-semibold">Aryan Gupta</p><p className="text-xs text-muted-foreground">Event Manager · Admin</p></div><ChevronRight className="size-4 text-muted-foreground"/></div>{[[UsersRound,"Team Management"],[Bell,"Notifications"],[HelpCircle,"Help & Support"],[Info,"About BBD"]].map(([Icon,t])=><button key={t as string} className="flex min-h-14 w-full items-center gap-3 border-b border-border text-sm"><Icon className="size-4"/><span className="flex-1 text-left">{t as string}</span><ChevronRight className="size-4 text-muted-foreground"/></button>)}<div className="flex min-h-14 items-center gap-3 border-b border-border text-sm"><Settings className="size-4"/><span className="flex-1">Dark Mode</span><button aria-label="Toggle dark mode" onClick={()=>setDark(!dark)} className={cn("flex h-7 w-12 items-center rounded-full p-1",dark?"justify-end bg-foreground":"justify-start bg-secondary")}><span className={cn("size-5 rounded-full",dark?"bg-background":"bg-muted-foreground")}/></button></div><Button variant="outline" onClick={onSignOut} className="mt-8 w-full"><LogOut/>Sign out</Button></div></>; }
+
+function RevenueScreen({onBack}:{onBack:()=>void}) { return <><Header back={onBack} title="Total Revenue" subtitle="Indian financial year" right={<Button variant="icon" aria-label="Revenue archive"><Trash2/></Button>}/><div className="space-y-6 px-4 py-6"><section className="border-b border-border pb-8"><p className="text-sm text-muted-foreground">FY 2026–27 · Apr '26 – Mar '27</p><p className="mt-4 font-mono text-4xl font-semibold">₹26,50,000</p><p className="mt-3 text-xs text-muted-foreground">Across 3 past and upcoming bookings</p></section><div><h2 className="mb-3 text-lg font-semibold">Revenue breakdown</h2>{events.map(e=><div key={e.id} className="grid grid-cols-[1fr_auto] gap-3 border-b border-border py-4"><div><p className="text-sm font-medium">{e.title}</p><p className="mt-1 text-xs text-muted-foreground">{e.date} · {e.client}</p></div><p className="font-mono text-sm">₹{(e.budget/100000).toFixed(1)}L</p></div>)}</div><div><h2 className="mb-3 text-lg font-semibold">Archive</h2><button className="grid min-h-20 w-full grid-cols-[44px_1fr_auto] items-center gap-3 rounded-xl border border-border bg-card p-3 text-left"><span className="grid size-10 place-items-center rounded-full bg-secondary"><CircleDollarSign className="size-4"/></span><span><b className="block text-sm">FY 2025–26 · ₹18,40,000</b><small className="text-xs text-muted-foreground">12 bookings preserved</small></span><ChevronRight className="size-4"/></button></div></div></>; }
+
+function Drawer({onClose,onRevenue}:{onClose:()=>void;onRevenue:()=>void}) { return <div className="fixed inset-0 z-50 bg-background/80" onClick={onClose}><aside className="h-full w-[82%] max-w-sm border-r border-border bg-card p-4" onClick={e=>e.stopPropagation()}><div className="flex items-center justify-between"><div className="flex items-center gap-3"><Logo/><span className="font-bold">BBD</span></div><Button variant="icon" aria-label="Close menu" onClick={onClose}><X/></Button></div><p className="mt-10 text-xs uppercase text-muted-foreground">Workspace</p><button onClick={onRevenue} className="mt-3 flex min-h-14 w-full items-center gap-3 border-y border-border text-sm"><CircleDollarSign className="size-5"/>Total Revenue<ChevronRight className="ml-auto size-4"/></button><p className="absolute bottom-6 text-xs text-muted-foreground">Plan · Manage · Execute</p></aside></div>; }
+
+function BottomNav({screen,navigate}:{screen:Screen;navigate:(s:Screen)=>void}) { const items:[[Screen,string,typeof Home]]=[["home","Home",Home],["team","Team",UsersRound],["bookings","Bookings",CalendarDays],["tasks","Tasks",ListChecks],["settings","More",MoreHorizontal]]; return <nav className="safe-bottom fixed inset-x-0 bottom-0 z-30 mx-auto grid max-w-[480px] grid-cols-5 border-x border-t border-border bg-card px-1 pt-2">{items.map(([key,label,Icon])=><button key={key} onClick={()=>navigate(key)} className={cn("flex min-h-14 flex-col items-center justify-center gap-1 text-[11px]",screen===key?"text-foreground":"text-muted-foreground")}><Icon className="size-5"/><span>{label}</span></button>)}</nav>; }
+function Tabs({items,active,setActive}:{items:string[];active:string;setActive:(s:string)=>void}) { return <div className="flex min-w-0 gap-1 overflow-x-auto rounded-lg bg-card p-1 no-scrollbar">{items.map(i=><button key={i} onClick={()=>setActive(i)} className={cn("min-h-10 shrink-0 flex-1 rounded-md px-3 text-xs font-medium",active===i?"bg-foreground text-background":"text-muted-foreground")}>{i}</button>)}</div>; }
+function TaskList({tasks}:{tasks:Task[]}) { return <div className="space-y-3">{tasks.slice(0,3).map(t=><TaskRow key={t.id} task={t}/>)}</div>; }
+function TaskRow({task,toggle}:{task:Task;toggle?:()=>void}) { const color=task.priority==="High"?"text-destructive":task.priority==="Medium"?"text-chart-4":"text-chart-3"; return <div className={cn("grid min-h-[82px] grid-cols-[44px_minmax(0,1fr)] items-center gap-2 rounded-xl border border-border bg-card p-3",task.done&&"opacity-50")}><button aria-label={task.done?"Mark incomplete":"Mark complete"} onClick={toggle} disabled={!toggle} className={cn("grid size-8 place-items-center rounded-full border border-border",task.done&&"border-chart-2 bg-chart-2 text-background")}>{task.done&&<Check className="size-4"/>}</button><div className="min-w-0"><div className="flex items-start justify-between gap-2"><p className={cn("text-sm font-medium",task.done&&"line-through")}>{task.title}</p><span className={cn("shrink-0 text-xs font-medium",color)}>{task.priority}</span></div><p className="mt-2 text-xs text-muted-foreground">{task.person} · {task.due}</p></div></div>; }
+function MemberRow({member}:{member:typeof members[number]}) { return <div className="grid min-h-[76px] grid-cols-[48px_minmax(0,1fr)_auto] items-center gap-3 rounded-xl border border-border bg-card p-3"><div className="grid size-11 place-items-center rounded-full bg-secondary text-xs font-bold">{member.initials}</div><div className="min-w-0"><p className="truncate text-sm font-semibold">{member.name}</p><p className="mt-1 truncate text-xs text-muted-foreground">{member.role}</p></div><span className="flex items-center gap-1.5 text-xs text-muted-foreground"><i className={cn("size-2 rounded-full",member.online?"bg-chart-2":"bg-muted-foreground")}/>{member.online?"Online":"Offline"}</span></div>; }
+function AvatarStack(){return <div className="mt-5 flex items-center"><div className="flex -space-x-2">{members.slice(0,3).map(m=><span key={m.initials} className="grid size-9 place-items-center rounded-full border-2 border-background bg-secondary text-[10px] font-bold">{m.initials}</span>)}</div><span className="ml-3 text-xs text-muted-foreground">3 members assigned</span></div>}
+function InfoCard({title,action,children}:{title:string;action?:string;children:React.ReactNode}) { return <section className="rounded-xl border border-border bg-card p-4"><div className="mb-4 flex items-center justify-between"><h2 className="font-semibold">{title}</h2>{action&&<button className="min-h-11 text-xs text-muted-foreground">{action}</button>}</div>{children}</section>; }
+function FormSection({title,subtitle,children}:{title:string;subtitle:string;children:React.ReactNode}) { return <fieldset className="space-y-4"><legend className="text-lg font-semibold">{title}</legend><p className="-mt-3 text-xs text-muted-foreground">{subtitle}</p>{children}</fieldset>; }
+function Field({label,icon,value,onChange,placeholder,prefix,textarea,error,...props}:{label:string;icon?:React.ReactNode;value?:string;onChange?:(s:string)=>void;placeholder?:string;prefix?:string;textarea?:boolean;error?:boolean}&React.InputHTMLAttributes<HTMLInputElement>) { const C=textarea?"textarea":"input"; return <label className="block"><span className="mb-2 block text-sm font-medium">{label}</span><div className={cn("flex min-h-12 items-center gap-2 rounded-lg border bg-secondary px-3",error?"border-destructive":"border-border focus-within:border-ring")}>{icon&&<span className="[&>svg]:size-4 text-muted-foreground">{icon}</span>}{prefix&&<span className="text-sm text-muted-foreground">{prefix}</span>}<C {...(props as never)} value={value} onChange={(e:React.ChangeEvent<HTMLInputElement|HTMLTextAreaElement>)=>onChange?.(e.target.value)} placeholder={placeholder} className={cn("min-h-11 min-w-0 flex-1 bg-transparent text-sm outline-hidden placeholder:text-muted-foreground",textarea&&"py-3 min-h-24 resize-none")}/></div>{error&&<span className="mt-1 block text-xs text-destructive">This field is required.</span>}</label>; }
+function SelectField({label,options}:{label:string;options:string[]}) { return <label className="block"><span className="mb-2 block text-sm font-medium">{label}</span><select className="min-h-12 w-full rounded-lg border border-border bg-secondary px-3 text-sm outline-hidden">{options.map(o=><option key={o}>{o}</option>)}</select></label>; }
+function Detail({icon,title,text}:{icon:React.ReactNode;title:string;text:string}) { return <div className="mb-3 grid grid-cols-[36px_1fr] gap-3 last:mb-0"><span className="grid size-9 place-items-center rounded-full bg-secondary [&>svg]:size-4">{icon}</span><span><b className="block text-sm font-medium">{title}</b><small className="text-xs text-muted-foreground">{text}</small></span></div>; }
+function Quick({label,value}:{label:string;value:string}) { return <div className="min-w-0 px-2"><p className="truncate font-mono text-sm font-semibold">{value}</p><p className="mt-1 truncate text-[10px] text-muted-foreground">{label}</p></div>; }
+function Chip({children}:{children:React.ReactNode}) { return <span className="flex min-h-9 shrink-0 items-center gap-1.5 rounded-full border border-border bg-secondary px-3 text-xs [&>svg]:size-3.5">{children}</span>; }
+function Empty({title,text}:{title:string;text:string}) { return <div className="py-20 text-center"><Sparkles className="mx-auto size-8 text-muted-foreground"/><h2 className="mt-4 font-semibold">{title}</h2><p className="mt-2 text-sm text-muted-foreground">{text}</p></div>; }

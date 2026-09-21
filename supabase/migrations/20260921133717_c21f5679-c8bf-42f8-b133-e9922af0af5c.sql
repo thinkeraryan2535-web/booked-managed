@@ -1,0 +1,14 @@
+DROP POLICY "Creators and admins update bookings" ON public.bookings;
+CREATE POLICY "Creators and admins update bookings" ON public.bookings FOR UPDATE TO authenticated USING (created_by = auth.uid() OR EXISTS (SELECT 1 FROM public.user_roles ur WHERE ur.user_id = auth.uid() AND ur.role = 'admin')) WITH CHECK (created_by = auth.uid() OR EXISTS (SELECT 1 FROM public.user_roles ur WHERE ur.user_id = auth.uid() AND ur.role = 'admin'));
+DROP POLICY "Admins archive bookings" ON public.bookings;
+CREATE POLICY "Admins archive bookings" ON public.bookings FOR DELETE TO authenticated USING (EXISTS (SELECT 1 FROM public.user_roles ur WHERE ur.user_id = auth.uid() AND ur.role = 'admin'));
+DROP POLICY "Assignees creators and admins update tasks" ON public.tasks;
+CREATE POLICY "Assignees creators and admins update tasks" ON public.tasks FOR UPDATE TO authenticated USING (assignee_id = auth.uid() OR created_by = auth.uid() OR EXISTS (SELECT 1 FROM public.user_roles ur WHERE ur.user_id = auth.uid() AND ur.role = 'admin')) WITH CHECK (assignee_id = auth.uid() OR created_by = auth.uid() OR EXISTS (SELECT 1 FROM public.user_roles ur WHERE ur.user_id = auth.uid() AND ur.role = 'admin'));
+DROP POLICY "Admins archive tasks" ON public.tasks;
+CREATE POLICY "Admins archive tasks" ON public.tasks FOR DELETE TO authenticated USING (EXISTS (SELECT 1 FROM public.user_roles ur WHERE ur.user_id = auth.uid() AND ur.role = 'admin'));
+DROP POLICY "Admins create notifications" ON public.notifications;
+CREATE POLICY "Admins create notifications" ON public.notifications FOR INSERT TO authenticated WITH CHECK (EXISTS (SELECT 1 FROM public.user_roles ur WHERE ur.user_id = auth.uid() AND ur.role = 'admin'));
+DROP POLICY "Admins manage revenue archives" ON public.revenue_archives;
+CREATE POLICY "Admins manage revenue archives" ON public.revenue_archives FOR ALL TO authenticated USING (EXISTS (SELECT 1 FROM public.user_roles ur WHERE ur.user_id = auth.uid() AND ur.role = 'admin')) WITH CHECK (EXISTS (SELECT 1 FROM public.user_roles ur WHERE ur.user_id = auth.uid() AND ur.role = 'admin'));
+REVOKE EXECUTE ON FUNCTION public.has_role(uuid, public.app_role) FROM PUBLIC, anon, authenticated;
+DROP FUNCTION public.has_role(uuid, public.app_role);
