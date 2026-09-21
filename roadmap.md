@@ -1,9 +1,9 @@
 # BBD Build Roadmap
 
-- [ ] Enable durable Cloud storage and authentication foundation
-- [ ] Build BBD mobile design system and shared navigation
-- [ ] Build mocked OTP entry
-- [ ] Build Home calendar, day states, and booking creation
-- [ ] Build event details, Team, Bookings, Tasks, and archive
-- [ ] Build notifications, settings, and revenue archive
+- [x] Enable durable Cloud storage and authentication foundation
+- [x] Build BBD mobile design system and shared navigation
+- [x] Build mocked OTP entry
+- [x] Build Home calendar, day states, and booking creation
+- [x] Build event details, Team, Bookings, Tasks, and archive
+- [x] Build notifications, settings, and revenue archive
 - [ ] Add route metadata and verify phone/desktop-centered layouts
