@@ -14,16 +14,270 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      bookings: {
+        Row: {
+          advance_payment: number
+          assigned_team_member_ids: string[]
+          client_name: string
+          contact_person: string | null
+          created_at: string
+          created_by: string
+          email: string | null
+          event_date: string
+          event_time: string | null
+          event_type: string
+          extra_activities: Json
+          fy_label: string
+          hall_cost: number
+          hall_name: string
+          id: string
+          people_count: number
+          phone: string
+          special_demand: string | null
+          spent_amount: number
+          status: Database["public"]["Enums"]["booking_status"]
+          total_budget: number
+          updated_at: string
+          venue_text: string
+        }
+        Insert: {
+          advance_payment?: number
+          assigned_team_member_ids?: string[]
+          client_name: string
+          contact_person?: string | null
+          created_at?: string
+          created_by: string
+          email?: string | null
+          event_date: string
+          event_time?: string | null
+          event_type: string
+          extra_activities?: Json
+          fy_label: string
+          hall_cost?: number
+          hall_name: string
+          id?: string
+          people_count: number
+          phone: string
+          special_demand?: string | null
+          spent_amount?: number
+          status?: Database["public"]["Enums"]["booking_status"]
+          total_budget?: number
+          updated_at?: string
+          venue_text: string
+        }
+        Update: {
+          advance_payment?: number
+          assigned_team_member_ids?: string[]
+          client_name?: string
+          contact_person?: string | null
+          created_at?: string
+          created_by?: string
+          email?: string | null
+          event_date?: string
+          event_time?: string | null
+          event_type?: string
+          extra_activities?: Json
+          fy_label?: string
+          hall_cost?: number
+          hall_name?: string
+          id?: string
+          people_count?: number
+          phone?: string
+          special_demand?: string | null
+          spent_amount?: number
+          status?: Database["public"]["Enums"]["booking_status"]
+          total_budget?: number
+          updated_at?: string
+          venue_text?: string
+        }
+        Relationships: []
+      }
+      notifications: {
+        Row: {
+          created_at: string
+          description: string
+          id: string
+          is_read: boolean
+          recipient_id: string
+          title: string
+          type: string
+        }
+        Insert: {
+          created_at?: string
+          description: string
+          id?: string
+          is_read?: boolean
+          recipient_id: string
+          title: string
+          type: string
+        }
+        Update: {
+          created_at?: string
+          description?: string
+          id?: string
+          is_read?: boolean
+          recipient_id?: string
+          title?: string
+          type?: string
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          id: string
+          name: string
+          preferences: Json
+          presence: Database["public"]["Enums"]["presence_status"]
+          updated_at: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          id: string
+          name: string
+          preferences?: Json
+          presence?: Database["public"]["Enums"]["presence_status"]
+          updated_at?: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          id?: string
+          name?: string
+          preferences?: Json
+          presence?: Database["public"]["Enums"]["presence_status"]
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      revenue_archives: {
+        Row: {
+          booking_records: Json
+          created_at: string
+          fy_label: string
+          id: string
+          total_amount: number
+          updated_at: string
+        }
+        Insert: {
+          booking_records?: Json
+          created_at?: string
+          fy_label: string
+          id?: string
+          total_amount?: number
+          updated_at?: string
+        }
+        Update: {
+          booking_records?: Json
+          created_at?: string
+          fy_label?: string
+          id?: string
+          total_amount?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      tasks: {
+        Row: {
+          assignee_id: string | null
+          booking_id: string
+          completed_at: string | null
+          created_at: string
+          created_by: string
+          due_date: string
+          due_time: string | null
+          id: string
+          last_updated_by: string | null
+          priority: Database["public"]["Enums"]["task_priority"]
+          scope: string
+          status: Database["public"]["Enums"]["task_status"]
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          assignee_id?: string | null
+          booking_id: string
+          completed_at?: string | null
+          created_at?: string
+          created_by: string
+          due_date: string
+          due_time?: string | null
+          id?: string
+          last_updated_by?: string | null
+          priority?: Database["public"]["Enums"]["task_priority"]
+          scope?: string
+          status?: Database["public"]["Enums"]["task_status"]
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          assignee_id?: string | null
+          booking_id?: string
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string
+          due_date?: string
+          due_time?: string | null
+          id?: string
+          last_updated_by?: string | null
+          priority?: Database["public"]["Enums"]["task_priority"]
+          scope?: string
+          status?: Database["public"]["Enums"]["task_status"]
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tasks_booking_id_fkey"
+            columns: ["booking_id"]
+            isOneToOne: false
+            referencedRelation: "bookings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_roles: {
+        Row: {
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "admin" | "team_member"
+      booking_status: "upcoming" | "today" | "completed"
+      presence_status: "online" | "offline"
+      task_priority: "high" | "medium" | "low"
+      task_status: "pending" | "done"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +404,12 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["admin", "team_member"],
+      booking_status: ["upcoming", "today", "completed"],
+      presence_status: ["online", "offline"],
+      task_priority: ["high", "medium", "low"],
+      task_status: ["pending", "done"],
+    },
   },
 } as const
