@@ -1,24 +1,16 @@
-# Booked & Managed
+# BBD Event Operations
 
-so as you see  what i need to build like its a management app for a booking bussiness and make sure ki ye ek mobile application aage jake banegah  so usi hisab se 100% mobile optimizes banaana !! and make sure ki jo theme rehega jo pura vercel ke theme pe rehega like usi ke jaisa not exact pr blakish theme ke sath and name " mentezo nai "  "BBD " rehega ye yaad rakhna and one more thing whchi is !! make sure ki kuch v miss na ho and please ekdam ach banana
+## Booking Creation Fix
 
-This project was built with [Lovable](https://lovable.dev).
+The booking creation functionality has been updated to provide better error handling and feedback to the user. The key changes are:
 
-## Build with Lovable
+1. When an error occurs during the booking creation process, a clear error message is now displayed to the user, informing them to try again.
+2. The booking creation state is properly updated to reflect the error and save status, ensuring a consistent user experience.
 
-Continue developing this project in the [Lovable editor](https://lovable.dev/projects/ccfe4fcc-f603-49f3-8f5a-f938b13ac317).
+These changes were made in the `src/routes/index.tsx` file, specifically in the `save` function. The updated code can be found in the commit [COMMIT_HASH].
 
-- **Ship faster**: describe what you want to build and Lovable handles the code.
-- **Stay in sync**: every change made in Lovable is committed straight to this repository.
-- **Full ownership**: this code is yours. Push to `main` on GitHub and your changes sync back into Lovable, ready for your next prompt.
+Please test the booking creation functionality thoroughly to ensure the fix is working as expected. If you encounter any further issues, please let me know.
 
-## Development
+## Other Updates
 
-Prefer working locally? You need Node.js and npm — [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating).
-
-```sh
-git clone <this-repository-url>
-cd <repository-name>
-npm i
-npm run dev
-```
+[Add any other relevant updates or changes made to the project]
