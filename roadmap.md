@@ -7,3 +7,4 @@
 - [x] Build event details, Team, Bookings, Tasks, and archive
 - [x] Build notifications, settings, and revenue archive
 - [ ] Add route metadata and verify phone/desktop-centered layouts
+- [ ] Enrich the interface with the new reference’s subtle blue-red depth and premium polish
