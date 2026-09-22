@@ -6,5 +6,5 @@
 - [x] Build Home calendar, day states, and booking creation
 - [x] Build event details, Team, Bookings, Tasks, and archive
 - [x] Build notifications, settings, and revenue archive
-- [ ] Add route metadata and verify phone/desktop-centered layouts
-- [ ] Enrich the interface with the new reference’s subtle blue-red depth and premium polish
+- [x] Add route metadata and verify phone/desktop-centered layouts
+- [x] Enrich the interface with the new reference’s subtle blue-red depth and premium polish
