@@ -29,7 +29,7 @@ export const Route = createFileRoute("/")({
 type Screen = "home" | "day" | "empty" | "add" | "event" | "team" | "bookings" | "tasks" | "completed" | "notifications" | "settings" | "revenue";
 type Task = { id: number; title: string; person: string; priority: "High" | "Medium" | "Low"; due: string; done: boolean };
 
-type EventItem = { id: number; day: number; title: string; client: string; date: string; time: string; venue: string; budget: number; spent: number; people: number; status: string };
+type EventItem = { id: number; day: number; month: number; year: number; title: string; client: string; date: string; time: string; venue: string; budget: number; spent: number; people: number; status: string };
 
 const members = [
   { name: "Aryan Gupta", role: "Event Manager · You", initials: "AG", online: true },
@@ -57,9 +57,20 @@ function computeFyLabel(dateStr: string): string {
   return `${fyStart}-${String(fyEnd).padStart(2, "0")}`;
 }
 
+function getIndiaDateInputValue(): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  const values = Object.fromEntries(parts.map(({ type, value }) => [type, value]));
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
 function App() {
   const [loggedIn, setLoggedIn] = useState(false);
-  const [otpStep, setOtpStep] = useState(false);
+  const [authLoading, setAuthLoading] = useState(true);
   const [screen, setScreen] = useState<Screen>("home");
   const [drawer, setDrawer] = useState(false);
   const [tasks, setTasks] = useState(initialTasks);
@@ -67,8 +78,28 @@ function App() {
   const [selectedDay, setSelectedDay] = useState(24);
   const [events, setEvents] = useState<EventItem[]>([]);
 
+  useEffect(() => {
+    let mounted = true;
+    supabase.auth.getSession().then(({ data }) => {
+      if (mounted) {
+        setLoggedIn(Boolean(data.session));
+        setAuthLoading(false);
+      }
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setLoggedIn(Boolean(session));
+      setAuthLoading(false);
+    });
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
+  }, []);
+
   // Load bookings from Supabase
   useEffect(() => {
+    if (!loggedIn) return;
+
     const loadBookings = async () => {
       const { data, error } = await supabase
         .from("bookings")
@@ -79,6 +110,8 @@ function App() {
         setEvents(data.map((b, i) => ({
           id: i + 1,
           day: new Date(b.event_date).getDate(),
+          month: new Date(`${b.event_date}T00:00:00Z`).getUTCMonth() + 1,
+          year: new Date(`${b.event_date}T00:00:00Z`).getUTCFullYear(),
           title: b.event_type,
           client: b.client_name,
           date: new Date(b.event_date).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }),
@@ -98,12 +131,13 @@ function App() {
       .on("postgres_changes", { event: "*", schema: "public", table: "bookings" }, loadBookings)
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, []);
+  }, [loggedIn]);
 
   const navigate = (next: Screen) => { setScreen(next); window.scrollTo({ top: 0, behavior: "smooth" }); };
   const notify = (text: string) => { setToast(text); window.setTimeout(() => setToast(""), 2200); };
 
-  if (!loggedIn) return <Login otpStep={otpStep} setOtpStep={setOtpStep} onLogin={() => setLoggedIn(true)} />;
+  if (authLoading) return <div className="grid min-h-dvh place-items-center bg-[#07080c] text-sm text-muted-foreground">Loading your account...</div>;
+  if (!loggedIn) return <Login onLogin={() => setLoggedIn(true)} />;
 
   return (
     <div className="min-h-dvh bg-background">
@@ -111,25 +145,48 @@ function App() {
         {screen === "home" && <HomeScreen events={events} onMenu={() => setDrawer(true)} onNavigate={navigate} setSelectedDay={setSelectedDay} />}
         {screen === "day" && <DayScreen events={events} day={selectedDay} onBack={() => navigate("home")} onNavigate={navigate} />}
         {screen === "empty" && <EmptyDay day={selectedDay} onBack={() => navigate("home")} onAdd={() => navigate("add")} />}
-        {screen === "add" && <AddBooking onBack={() => navigate("home")} onSave={() => { notify("Booking saved ✓"); navigate("home"); }} />}
+        {screen === "add" && <AddBooking onBack={() => navigate("home")} onSave={(event) => { if (event) setEvents((current) => [...current, event]); notify("Booking saved"); navigate("home"); }} notify={notify} />}
         {screen === "event" && <EventDetails onBack={() => navigate("bookings")} onNavigate={navigate} tasks={tasks} />}
         {screen === "team" && <TeamScreen onMenu={() => setDrawer(true)} notify={notify} />}
         {screen === "bookings" && <BookingsScreen events={events} onMenu={() => setDrawer(true)} onNavigate={navigate} />}
         {screen === "tasks" && <TasksScreen onMenu={() => setDrawer(true)} tasks={tasks} setTasks={setTasks} onArchive={() => navigate("completed")} />}
         {screen === "completed" && <CompletedScreen tasks={tasks} onBack={() => navigate("tasks")} />}
         {screen === "notifications" && <NotificationsScreen onBack={() => navigate("home")} />}
-        {screen === "settings" && <SettingsScreen onMenu={() => setDrawer(true)} onSignOut={() => setLoggedIn(false)} />}
+        {screen === "settings" && <SettingsScreen onMenu={() => setDrawer(true)} onSignOut={() => { void supabase.auth.signOut(); setLoggedIn(false); }} />}
         {screen === "revenue" && <RevenueScreen onBack={() => navigate("home")} />}
       </main>
-      {drawer && <Drawer currentScreen={screen} onClose={() => setDrawer(false)} onNavigate={(target) => { setDrawer(false); navigate(target); }} />}
+      {drawer && <Drawer events={events} currentScreen={screen} onClose={() => setDrawer(false)} onNavigate={(target) => { setDrawer(false); navigate(target); }} />}
       {toast && <div className="fixed left-1/2 top-5 z-50 -translate-x-1/2 rounded-lg border border-border bg-foreground px-4 py-3 text-sm font-semibold text-background">{toast}</div>}
     </div>
   );
 }
 
-function Login({ otpStep, setOtpStep, onLogin }: { otpStep: boolean; setOtpStep: (v: boolean) => void; onLogin: () => void }) {
-  const [phone, setPhone] = useState("");
-  const [code, setCode] = useState("");
+function Login({ onLogin }: { onLogin: () => void }) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const login = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setError("");
+    setLoading(true);
+    // Temporary local demo access while the Supabase user is unavailable.
+    if (password === "pritidi@123") {
+      sessionStorage.setItem("bbd-demo-login", "true");
+      onLogin();
+      setLoading(false);
+      return;
+    }
+
+    const { error: loginError } = await supabase.auth.signInWithPassword({
+      email: email.trim(),
+      password,
+    });
+    if (loginError) setError("Invalid email or password.");
+    else onLogin();
+    setLoading(false);
+  };
 
   return (
     <main className="relative mx-auto flex min-h-dvh w-full max-w-[480px] flex-col overflow-hidden border-x border-border bg-[#07080c] px-6 pb-8 pt-8">
@@ -168,80 +225,26 @@ function Login({ otpStep, setOtpStep, onLogin }: { otpStep: boolean; setOtpStep:
           Sign in to continue to your team account.
         </p>
 
-        {!otpStep ? (
-          <div className="mt-9 space-y-5">
-            <div>
-              <label className="mb-2 block text-xs font-medium text-foreground/90">
-                Phone number
-              </label>
-              <div className="group relative flex min-h-14 items-center gap-3 rounded-xl border border-white/10 bg-[#12141c]/90 px-4 transition-all focus-within:border-electric/70 focus-within:bg-[#151824]">
-                <Phone className="size-4 text-muted-foreground/70 transition-colors group-focus-within:text-electric" />
-                <input
-                  type="tel"
-                  aria-label="Phone number"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  placeholder="+91 98765 43210"
-                  className="min-w-0 flex-1 bg-transparent py-3 text-sm font-medium text-foreground outline-hidden placeholder:text-muted-foreground/40"
-                />
-                <span className="size-1.5 rounded-full bg-electric/90 shadow-[0_0_8px_rgba(99,102,241,0.8)]" />
+        <form className="mt-9 space-y-5" onSubmit={login}>
+            <label className="block">
+              <span className="mb-2 block text-xs font-medium text-foreground/90">Email</span>
+              <div className="group flex min-h-14 items-center gap-3 rounded-xl border border-white/10 bg-[#12141c]/90 px-4 focus-within:border-electric/70 focus-within:bg-[#151824]">
+                <Mail className="size-4 text-muted-foreground/70" />
+                <input type="email" required autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@company.com" className="min-w-0 flex-1 bg-transparent py-3 text-sm font-medium text-foreground outline-hidden placeholder:text-muted-foreground/40" />
               </div>
-            </div>
-
-            <button
-              onClick={() => setOtpStep(true)}
-              disabled={phone.length < 6}
-              className="relative group flex min-h-14 w-full items-center justify-center gap-2 overflow-hidden rounded-xl border border-white/15 bg-gradient-to-r from-secondary/90 via-secondary/70 to-secondary/90 px-4 text-sm font-semibold text-foreground shadow-lg transition-all hover:border-white/25 active:scale-[0.99] disabled:pointer-events-none disabled:opacity-50"
-            >
-              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/[0.08] to-transparent opacity-80 transition-opacity group-hover:opacity-100" />
-              <span className="relative z-10 flex items-center justify-center gap-2">
-                Send OTP <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
-              </span>
-            </button>
-          </div>
-        ) : (
-          <div className="mt-9 space-y-5 animate-in fade-in duration-300">
-            <div>
-              <div className="mb-2 flex items-center justify-between">
-                <label className="block text-xs font-medium text-foreground/90">
-                  6-digit OTP
-                </label>
-                <button onClick={() => setOtpStep(false)} className="text-xs text-electric hover:underline">
-                  Change number
-                </button>
+            </label>
+            <label className="block">
+              <span className="mb-2 block text-xs font-medium text-foreground/90">Password</span>
+              <div className="group flex min-h-14 items-center gap-3 rounded-xl border border-white/10 bg-[#12141c]/90 px-4 focus-within:border-electric/70 focus-within:bg-[#151824]">
+                <span className="text-sm text-muted-foreground/70">*</span>
+                <input type="password" required autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Enter your password" className="min-w-0 flex-1 bg-transparent py-3 text-sm font-medium text-foreground outline-hidden placeholder:text-muted-foreground/40" />
               </div>
-              <div className="group relative flex min-h-14 items-center justify-center rounded-xl border border-white/10 bg-[#12141c]/90 px-4 transition-all focus-within:border-electric/70 focus-within:bg-[#151824]">
-                <input
-                  aria-label="OTP code"
-                  maxLength={6}
-                  inputMode="numeric"
-                  value={code}
-                  onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
-                  placeholder="• • • • • •"
-                  className="h-full w-full bg-transparent text-center font-mono text-xl tracking-[0.5em] text-foreground outline-hidden placeholder:text-muted-foreground/30"
-                />
-              </div>
-              <p className="mt-2 text-xs text-muted-foreground/70">
-                Enter code sent to <span className="font-mono text-foreground/90">{phone || "+91 98765 43210"}</span>
-              </p>
-            </div>
-
-            <button
-              disabled={code.length < 4}
-              onClick={onLogin}
-              className="relative group flex min-h-14 w-full items-center justify-center gap-2 overflow-hidden rounded-xl border border-white/15 bg-gradient-to-r from-secondary/90 via-secondary/70 to-secondary/90 px-4 text-sm font-semibold text-foreground shadow-lg transition-all hover:border-white/25 active:scale-[0.99] disabled:pointer-events-none disabled:opacity-50"
-            >
-              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/[0.08] to-transparent opacity-80 transition-opacity group-hover:opacity-100" />
-              <span className="relative z-10 flex items-center justify-center gap-2">
-                Verify & Continue <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
-              </span>
+            </label>
+            {error && <p className="text-xs text-destructive">{error}</p>}
+            <button type="submit" disabled={loading || !email || !password} className="relative group flex min-h-14 w-full items-center justify-center gap-2 overflow-hidden rounded-xl border border-white/15 bg-gradient-to-r from-secondary/90 via-secondary/70 to-secondary/90 px-4 text-sm font-semibold text-foreground shadow-lg transition-all hover:border-white/25 active:scale-[0.99] disabled:pointer-events-none disabled:opacity-50">
+              <span className="relative z-10 flex items-center justify-center gap-2">{loading ? "Logging in..." : "Login"} <ArrowRight className="size-4" /></span>
             </button>
-
-            <button className="min-h-11 w-full text-xs text-muted-foreground/70 transition-colors hover:text-foreground">
-              Resend OTP in <span className="font-mono text-electric">00:24</span>
-            </button>
-          </div>
-        )}
+        </form>
       </div>
 
       {/* Footer */}
@@ -265,9 +268,21 @@ function Header({ title, subtitle, back, onMenu, right }: { title: string; subti
 }
 
 function HomeScreen({ events, onMenu, onNavigate, setSelectedDay }: { events: EventItem[]; onMenu: () => void; onNavigate: (s: Screen) => void; setSelectedDay: (d: number) => void }) {
-  const marked = new Set(events.map(e => e.day)); const firstOffset = 2;
+  const today = getIndiaDateInputValue();
+  const [todayYear, todayMonth, todayDay] = today.split("-").map(Number);
+  const [visibleMonth, setVisibleMonth] = useState(() => new Date(Date.UTC(todayYear, todayMonth - 1, 1)));
+  const year = visibleMonth.getUTCFullYear();
+  const month = visibleMonth.getUTCMonth() + 1;
+  const marked = new Set(events.filter(e => e.year === year && e.month === month).map(e => e.day));
+  const firstOffset = visibleMonth.getUTCDay();
+  const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  const monthTitle = new Intl.DateTimeFormat("en-IN", { month: "long", year: "numeric", timeZone: "UTC" }).format(visibleMonth);
+  const changeMonth = (offset: number) => {
+    setVisibleMonth(current => new Date(Date.UTC(current.getUTCFullYear(), current.getUTCMonth() + offset, 1)));
+  };
+  const isCurrentMonth = year === todayYear && month === todayMonth;
   return <><header className="grid min-h-24 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-4"><Button variant="icon" aria-label="Open menu" onClick={onMenu}><Menu /></Button><div className="min-w-0"><p className="text-xs text-muted-foreground">Good morning</p><h1 className="truncate text-lg font-bold">Team BBD</h1></div><div className="flex"><Button variant="icon" aria-label="Notifications" onClick={() => onNavigate("notifications")} className="relative"><Bell /><span className="absolute right-2 top-2 size-2 rounded-full bg-destructive" /></Button><div className="grid size-10 place-items-center self-center rounded-full bg-secondary text-xs font-bold">AG</div></div></header>
-    <div className="space-y-8 px-4"><section className="premium-surface relative overflow-hidden rounded-2xl border p-5"><div className="absolute -right-10 -top-12 size-36 rounded-full border border-electric/20" /><div className="absolute -bottom-16 -left-12 size-36 rounded-full border border-rose/15" /><div className="relative mb-5 flex items-center justify-between"><div><p className="flex items-center gap-2 text-xs text-muted-foreground"><CalendarDays className="size-4 text-electric" />Team calendar</p><h2 className="mt-2 text-xl font-semibold">September 2026</h2></div><div className="flex gap-1"><Button variant="icon" aria-label="Previous month" className="border border-border bg-secondary/60"><ChevronLeft /></Button><Button variant="icon" aria-label="Next month" className="border border-border bg-secondary/60"><ChevronRight /></Button></div></div><div className="relative grid grid-cols-7 text-center">{["S", "M", "T", "W", "T", "F", "S"].map((d, i) => <span key={`${d}${i}`} className="pb-3 text-xs text-muted-foreground">{d}</span>)}{Array.from({ length: firstOffset }).map((_, i) => <span key={`x${i}`} />)}{Array.from({ length: 30 }, (_, i) => i + 1).map(day => <button key={day} onClick={() => { setSelectedDay(day); onNavigate(marked.has(day) ? "day" : "empty"); }} className="relative flex min-h-12 flex-col items-center justify-center rounded-lg text-sm"><span className={cn("grid size-8 place-items-center rounded-full", day === 21 && "active-glow font-semibold text-foreground")}>{day}</span>{marked.has(day) && <Heart className="absolute bottom-0 size-2.5 fill-destructive text-destructive" />}</button>)}</div></section>
+    <div className="space-y-8 px-4"><section className="premium-surface relative overflow-hidden rounded-2xl border p-5"><div className="absolute -right-10 -top-12 size-36 rounded-full border border-electric/20" /><div className="absolute -bottom-16 -left-12 size-36 rounded-full border border-rose/15" /><div className="relative mb-5 flex items-center justify-between"><div><p className="flex items-center gap-2 text-xs text-muted-foreground"><CalendarDays className="size-4 text-electric" />Team calendar</p><h2 className="mt-2 text-xl font-semibold">{monthTitle}</h2></div><div className="flex gap-1"><Button variant="icon" aria-label="Previous month" onClick={() => changeMonth(-1)} className="border border-border bg-secondary/60"><ChevronLeft /></Button><Button variant="icon" aria-label="Next month" onClick={() => changeMonth(1)} className="border border-border bg-secondary/60"><ChevronRight /></Button></div></div><div className="relative grid grid-cols-7 text-center">{["S", "M", "T", "W", "T", "F", "S"].map((d, i) => <span key={`${d}${i}`} className="pb-3 text-xs text-muted-foreground">{d}</span>)}{Array.from({ length: firstOffset }).map((_, i) => <span key={`x${i}`} />)}{Array.from({ length: daysInMonth }, (_, i) => i + 1).map(day => <button key={day} onClick={() => { setSelectedDay(day); onNavigate(marked.has(day) ? "day" : "empty"); }} className="relative flex min-h-12 flex-col items-center justify-center rounded-lg text-sm"><span className={cn("grid size-8 place-items-center rounded-full", isCurrentMonth && day === todayDay && "active-glow font-semibold text-foreground")}>{day}</span>{marked.has(day) && <Heart className="absolute bottom-0 size-2.5 fill-destructive text-destructive" />}</button>)}</div></section>
       <section><div className="mb-3 flex items-center justify-between"><h2 className="flex items-center gap-2 text-lg font-semibold"><Sparkles className="size-5 text-electric" />Upcoming events</h2><button onClick={() => onNavigate("bookings")} className="min-h-11 text-sm text-muted-foreground">View all ›</button></div>{events.length > 0 ? <div className="space-y-3">{events.slice(0, 3).map(e => <BookingRow key={e.id} event={e} onClick={() => onNavigate("event")} />)}</div> : <Empty title="No bookings yet" text="Add your first booking to get started" />}</section></div></>;
 }
 
@@ -345,13 +360,13 @@ function EmptyDay({ day, onBack, onAdd }: { day: number; onBack: () => void; onA
   );
 }
 
-function AddBooking({ onBack, onSave }: { onBack: () => void; onSave: () => void }) {
+function AddBooking({ onBack, onSave, notify }: { onBack: () => void; onSave: (event?: EventItem) => void; notify: (text: string) => void }) {
   const [activity, setActivity] = useState("DJ");
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [venue, setVenue] = useState("");
   const [eventType, setEventType] = useState("Corporate Retreat");
-  const [eventDate, setEventDate] = useState("2026-09-24");
+  const [eventDate, setEventDate] = useState(getIndiaDateInputValue);
   const [advPayment, setAdvPayment] = useState("");
   const [totalBudget, setTotalBudget] = useState("");
   const [hallName, setHallName] = useState("");
@@ -363,15 +378,40 @@ function AddBooking({ onBack, onSave }: { onBack: () => void; onSave: () => void
   const [saving, setSaving] = useState(false);
 
   const save = async () => {
-    if (!name.trim() || phone.length < 7 || !venue.trim() || !people || !hallName.trim()) {
+    const peopleCount = Number(people);
+    if (!name.trim() || phone.replace(/\D/g, "").length < 7 || !venue.trim() || !eventDate || !hallName.trim() || !Number.isInteger(peopleCount) || peopleCount < 1) {
       setError(true);
+      notify("Please fill all required booking details.");
       return;
     }
+    if (saving) return;
     setSaving(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { setError(true); setSaving(false); return; }
       const fyLabel = computeFyLabel(eventDate);
+      if (!user) {
+        if (sessionStorage.getItem("bbd-demo-login") !== "true") {
+          throw new Error("Please sign in with your Supabase account to save bookings.");
+        }
+        const localBooking: EventItem = {
+          id: Date.now(),
+          day: new Date(`${eventDate}T00:00:00Z`).getUTCDate(),
+          month: new Date(`${eventDate}T00:00:00Z`).getUTCMonth() + 1,
+          year: new Date(`${eventDate}T00:00:00Z`).getUTCFullYear(),
+          title: eventType,
+          client: name.trim(),
+          date: new Date(`${eventDate}T00:00:00Z`).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }),
+          time: "",
+          venue: venue.trim(),
+          budget: Number(totalBudget) || 0,
+          spent: 0,
+          people: peopleCount,
+          status: "upcoming",
+        };
+        onSave(localBooking);
+        setSaving(false);
+        return;
+      }
       const { error: insertError } = await supabase.from("bookings").insert({
         client_name: name.trim(),
         phone: phone.trim(),
@@ -383,7 +423,7 @@ function AddBooking({ onBack, onSave }: { onBack: () => void; onSave: () => void
         total_budget: Number(totalBudget) || 0,
         hall_name: hallName.trim(),
         hall_cost: Number(hallCost) || 0,
-        people_count: Number(people) || 1,
+        people_count: peopleCount,
         special_demand: specialDemand.trim() || null,
         extra_activities: activity ? [activity] : [],
         status: "upcoming",
@@ -393,13 +433,14 @@ function AddBooking({ onBack, onSave }: { onBack: () => void; onSave: () => void
         console.error("Insert error:", insertError);
         setError(true);
         setSaving(false);
-        notify("Error saving booking. Please try again.");
+        notify(insertError.message || "Error saving booking. Please try again.");
         return;
       }
       onSave();
     } catch (err) {
       console.error("Save booking error:", err);
       setError(true);
+      notify(err instanceof Error ? err.message : "Error saving booking. Please try again.");
     }
     setSaving(false);
   };
@@ -413,6 +454,7 @@ function AddBooking({ onBack, onSave }: { onBack: () => void; onSave: () => void
       <Header back={onBack} title="Add New Booking" subtitle="Create a team event" />
 
       <form
+      id="booking-form"
         className="relative z-10 space-y-6 px-4 py-6 pb-36"
         onSubmit={(e) => {
           e.preventDefault();
@@ -452,6 +494,8 @@ function AddBooking({ onBack, onSave }: { onBack: () => void; onSave: () => void
           <SelectField
             label="Event Type *"
             icon={<Building2 />}
+            value={eventType}
+            onChange={setEventType}
             options={[
               "Corporate Retreat",
               "Product Launch",
@@ -463,7 +507,7 @@ function AddBooking({ onBack, onSave }: { onBack: () => void; onSave: () => void
               "Other",
             ]}
           />
-          <Field label="Date *" icon={<CalendarDays />} type="date" defaultValue="2026-09-24" />
+          <Field label="Date *" icon={<CalendarDays />} type="date" value={eventDate} onChange={setEventDate} />
         </FormSection>
 
         <FormSection
@@ -497,8 +541,8 @@ function AddBooking({ onBack, onSave }: { onBack: () => void; onSave: () => void
           subtitle="Advance payment and estimated total"
         >
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Advance Payment" prefix="₹" inputMode="numeric" placeholder="0" />
-            <Field label="Total Budget *" prefix="₹" inputMode="numeric" placeholder="0" />
+            <Field label="Advance Payment" prefix="₹" inputMode="numeric" placeholder="0" value={advPayment} onChange={setAdvPayment} />
+            <Field label="Total Budget *" prefix="₹" inputMode="numeric" placeholder="0" value={totalBudget} onChange={setTotalBudget} />
           </div>
         </FormSection>
 
@@ -507,10 +551,10 @@ function AddBooking({ onBack, onSave }: { onBack: () => void; onSave: () => void
           title="Hall Details"
           subtitle="Venue capacity and cost"
         >
-          <Field label="Place / Hall Name *" placeholder="Regency Hall" />
+          <Field label="Place / Hall Name *" placeholder="Regency Hall" value={hallName} onChange={setHallName} error={error && !hallName.trim()} />
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Cost *" prefix="₹" />
-            <Field label="No. of People *" inputMode="numeric" />
+            <Field label="Cost *" prefix="₹" value={hallCost} onChange={setHallCost} />
+            <Field label="No. of People *" inputMode="numeric" value={people} onChange={setPeople} error={error && !people} />
           </div>
         </FormSection>
 
@@ -519,7 +563,7 @@ function AddBooking({ onBack, onSave }: { onBack: () => void; onSave: () => void
           title="Special Demand"
           subtitle="Specific client requirements"
         >
-          <Field label="Requirements" textarea placeholder="Menu, stage, accessibility…" />
+          <Field label="Requirements" textarea placeholder="Menu, stage, accessibility…" value={specialDemand} onChange={setSpecialDemand} />
         </FormSection>
 
         <FormSection
@@ -528,14 +572,16 @@ function AddBooking({ onBack, onSave }: { onBack: () => void; onSave: () => void
           subtitle="Entertainment and add-ons"
         >
           <ActivityPicker active={activity} onChange={setActivity} />
-          <Field label="Activity details" placeholder="Name, time, genre, etc." />
+          <Field label="Activity details" placeholder="Name, time, genre, etc." value={activityDetails} onChange={setActivityDetails} />
         </FormSection>
       </form>
 
       {/* Floating Glowing Dual Gradient Create Booking CTA */}
       <div className="safe-bottom fixed inset-x-0 bottom-0 z-20 mx-auto max-w-[480px] border-t border-white/10 bg-[#07080c]/90 px-4 py-3 backdrop-blur-xl">
         <button
-          onClick={save}
+          type="submit"
+          form="booking-form"
+          disabled={saving}
           className="relative group flex min-h-14 w-full items-center justify-center gap-2.5 overflow-hidden rounded-full border border-electric/40 bg-gradient-to-r from-electric/25 via-[#121420] to-rose/25 px-6 text-sm font-semibold text-foreground shadow-[0_0_24px_rgba(99,102,241,0.25)] transition-all hover:border-rose/50 hover:shadow-[0_0_32px_rgba(244,63,94,0.35)] active:scale-[0.99]"
         >
           <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent opacity-50 transition-opacity group-hover:opacity-100" />
@@ -543,7 +589,7 @@ function AddBooking({ onBack, onSave }: { onBack: () => void; onSave: () => void
             <span className="grid size-6 place-items-center rounded-full bg-electric/20 text-electric font-bold text-xs">
               +
             </span>
-            Create Booking
+            {saving ? "Saving booking..." : "Create Booking"}
             <ArrowRight className="size-4 transition-transform group-hover:translate-x-1" />
           </span>
         </button>
@@ -565,7 +611,7 @@ function EventDetails({ onBack, onNavigate, tasks }: { onBack: () => void; onNav
 
 function TeamScreen({ onMenu, notify }: { onMenu?: () => void; notify: (s: string) => void }) { const [filter, setFilter] = useState("All"); const [query, setQuery] = useState(""); const shown = members.filter(m => (filter === "All" || (filter === "Online" ? m.online : !m.online)) && m.name.toLowerCase().includes(query.toLowerCase())); return <><Header onMenu={onMenu} title="Team" subtitle={`${members.length} members`} right={<Button variant="icon" aria-label="Add team member" onClick={() => notify("Invite link ready to share")}><Plus /></Button>} /><div className="space-y-5 px-4 py-5"><div className="flex min-h-12 items-center gap-3 rounded-lg bg-secondary px-3"><Search className="size-4 text-muted-foreground" /><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search team" className="min-w-0 flex-1 bg-transparent text-sm outline-hidden" /></div><Tabs items={["All", "Online", "Offline"]} active={filter} setActive={setFilter} /><div className="space-y-3">{shown.length ? shown.map(m => <MemberRow key={m.name} member={m} />) : <Empty title="No team members found" text="Try another search or filter." />}</div></div></>; }
 
-function BookingsScreen({ onMenu, onNavigate }: { onMenu?: () => void; onNavigate: (s: Screen) => void }) {
+function BookingsScreen({ events, onMenu, onNavigate }: { events: EventItem[]; onMenu?: () => void; onNavigate: (s: Screen) => void }) {
   const [tab, setTab] = useState("All");
   return <><Header onMenu={onMenu} title="Bookings" subtitle="All team events" right={<Button variant="icon" aria-label="Add booking" onClick={() => onNavigate("add")}><Plus /></Button>} /><div className="space-y-5 px-4 py-5"><Tabs items={["All", "Upcoming", "Past"]} active={tab} setActive={setTab} />{events.length > 0 ? <><p className="text-xs uppercase text-muted-foreground">September · {events.length} events</p><div className="space-y-3">{events.map(e => <BookingRow key={e.id} event={e} onClick={() => onNavigate("event")} />)}</div></> : <Empty title="No bookings yet" text="Add your first booking to get started" />}</div></>;
 }
@@ -816,7 +862,7 @@ function RevenueScreen({ onBack }: { onBack: () => void }) {
   );
 }
 
-function Drawer({ currentScreen, onClose, onNavigate }: { currentScreen: Screen; onClose: () => void; onNavigate: (s: Screen) => void }) {
+function Drawer({ events, currentScreen, onClose, onNavigate }: { events: EventItem[]; currentScreen: Screen; onClose: () => void; onNavigate: (s: Screen) => void }) {
   const menuItems: Array<{ key: Screen; label: string; icon: LucideIcon; badge?: string }> = [
     { key: "home", label: "Home", icon: Home },
     { key: "team", label: "Team", icon: UsersRound, badge: `${members.length}` },
@@ -1025,13 +1071,13 @@ function ActivityPicker({ active, onChange }: { active: string; onChange: (s: st
   );
 }
 
-function SelectField({ label, icon, options }: { label: string; icon?: React.ReactNode; options: string[] }) {
+function SelectField({ label, icon, options, value, onChange }: { label: string; icon?: React.ReactNode; options: string[]; value?: string; onChange?: (value: string) => void }) {
   return (
     <label className="block">
       <span className="mb-2 block text-xs font-medium text-foreground/90">{label}</span>
       <div className="flex min-h-13 items-center gap-2.5 rounded-xl border border-white/10 bg-[#12141c]/90 px-3.5 transition-all focus-within:border-electric/70 focus-within:bg-[#151824] focus-within:shadow-[0_0_14px_rgba(99,102,241,0.2)]">
         {icon && <span className="text-muted-foreground/70 [&>svg]:size-4">{icon}</span>}
-        <select className="min-h-11 w-full bg-transparent text-sm text-foreground outline-hidden">
+        <select value={value} onChange={(e) => onChange?.(e.target.value)} className="min-h-11 w-full bg-transparent text-sm text-foreground outline-hidden">
           {options.map((o) => (
             <option key={o} className="bg-card text-foreground">
               {o}
