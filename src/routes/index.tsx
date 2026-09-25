@@ -162,6 +162,8 @@ function App() {
 }
 
 function Login({ onLogin }: { onLogin: () => void }) {
+  const demoEmail = "demo@bbd.com";
+  const demoPassword = "123456";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -171,20 +173,36 @@ function Login({ onLogin }: { onLogin: () => void }) {
     event.preventDefault();
     setError("");
     setLoading(true);
-    // Temporary local demo access while the Supabase user is unavailable.
-    if (password === "pritidi@123") {
-      sessionStorage.setItem("bbd-demo-login", "true");
-      onLogin();
-      setLoading(false);
-      return;
-    }
-
-    const { error: loginError } = await supabase.auth.signInWithPassword({
-      email: email.trim(),
+    const normalizedEmail = email.trim().toLowerCase();
+    let { error: loginError } = await supabase.auth.signInWithPassword({
+      email: normalizedEmail,
       password,
     });
-    if (loginError) setError("Invalid email or password.");
-    else onLogin();
+
+    // Bootstrap the shared demo account when it does not exist yet.
+    if (loginError && normalizedEmail === demoEmail && password === demoPassword) {
+      const { error: signUpError } = await supabase.auth.signUp({
+        email: demoEmail,
+        password: demoPassword,
+      });
+      if (!signUpError) {
+        const result = await supabase.auth.signInWithPassword({
+          email: demoEmail,
+          password: demoPassword,
+        });
+        loginError = result.error;
+      } else {
+        loginError = signUpError;
+      }
+    }
+
+    if (loginError) {
+      setError(loginError.message.includes("confirmation")
+        ? "Demo account created. Disable email confirmation in Supabase Auth, then try again."
+        : loginError.message);
+    } else {
+      onLogin();
+    }
     setLoading(false);
   };
 
